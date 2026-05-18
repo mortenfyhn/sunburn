@@ -17,7 +17,3 @@ Requires Android SDK with platform 35 and JDK 17.
 
 - UV index: [currentuvindex.com](https://currentuvindex.com) (CC BY 4.0) — matches yr.no within ≤ 0.1 in spot checks.
 - Location search: [Nominatim](https://nominatim.openstreetmap.org/) / OpenStreetMap (ODbL).
-
-## License
-
-[MIT](LICENSE).
