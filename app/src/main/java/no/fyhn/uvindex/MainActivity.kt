@@ -142,7 +142,7 @@ private fun UvApp() {
         // already has usable data on screen.
         val cached = recents.loadCache(s)
         forecast = if (cached != null) ForecastState.Loaded(cached) else ForecastState.Loading
-        runCatching { fetchForecast(s) }
+        runCatching { fetchForecast(s, cached) }
             .onSuccess {
                 forecast = ForecastState.Loaded(it)
                 recents.saveCache(s, it)

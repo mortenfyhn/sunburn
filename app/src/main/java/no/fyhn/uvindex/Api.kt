@@ -48,12 +48,19 @@ private const val HTTP_TIMEOUT_MS = 8_000
  * 24 hourly UV values for the location's local calendar day (00–23).
  *
  * Source: currentuvindex.com — free, no key, CC BY 4.0. It exposes `history`
- * (past 24h), `now`, and `forecast` (≈120h ahead) in UTC, which gives us the
- * full local day regardless of when the app is opened. Values match yr.no /
+ * (past ~6h), `now`, and `forecast` (≈120h ahead) in UTC. Values match yr.no /
  * met.no within ≤ 0.1 UVI in spot checks (currentuvindex.com and met.no both
  * model real-world cloud-adjusted UV).
+ *
+ * `previous` is the last known good copy of today (typically from cache). The
+ * API only returns past data within `history`'s short window, so opening the
+ * app late in the day leaves hours 0..(now-6) unaccounted for. We fall back to
+ * `previous` for those hours — if the user opened the app earlier today, that
+ * cache covers the morning the API has since forgotten. Without this, missing
+ * hours default to 0 and the chart shows a flat-zero morning with a sharp
+ * rise where `history` begins.
  */
-suspend fun fetchForecast(loc: Location): List<HourUv> = withContext(Dispatchers.IO) {
+suspend fun fetchForecast(loc: Location, previous: List<HourUv>? = null): List<HourUv> = withContext(Dispatchers.IO) {
     val url = "https://currentuvindex.com/api/v1/uvi" +
         "?latitude=${loc.latitude}&longitude=${loc.longitude}"
     val body = httpGet(url)
@@ -69,8 +76,10 @@ suspend fun fetchForecast(loc: Location): List<HourUv> = withContext(Dispatchers
     parsed.now?.assignTo(byLocalHour, zone, today)
     parsed.forecast?.forEach { it.assignTo(byLocalHour, zone, today) }
 
+    val previousByHour = previous?.associate { it.localTime.hour to it.uv }.orEmpty()
+
     (0..23).map { hour ->
-        val uv = byLocalHour[hour] ?: 0.0
+        val uv = byLocalHour[hour] ?: previousByHour[hour] ?: 0.0
         HourUv(LocalDateTime.of(today, LocalTime.of(hour, 0)), uv)
     }
 }
