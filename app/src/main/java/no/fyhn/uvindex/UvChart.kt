@@ -62,8 +62,8 @@ fun UvChart(
             return plotBottom - frac.toFloat() * plotH
         }
 
-        // Y-axis: 0, 2, 4, 6, 8 (clipped to yMax)
-        val yTicks = listOf(0, 2, 4, 6, 8).filter { it <= yMax }
+        // Y-axis: a label at every integer up to yMax.
+        val yTicks = (0..yMax.toInt()).toList()
         for (v in yTicks) {
             val y = yAt(v.toDouble())
             val layout = tm.measure(v.toString(), axisStyle)
@@ -76,13 +76,13 @@ fun UvChart(
             )
         }
 
-        // X-axis: 5 evenly-spaced ticks. The right edge is labelled "24" to read
-        // as "end of day" — the last data point is hour 23, but the conventional
-        // 0–24 framing communicates "this is one full day" more clearly.
-        val xTickIdx = listOf(0, 6, 12, 18, lastIndex).distinct().filter { it < hours.size }
+        // X-axis: label the daytime quarters only. The chart still spans 0..24h
+        // edge to edge — the 00 and 24 labels were noisy and redundant since
+        // the curve visibly bottoms out at zero there.
+        val xTickIdx = listOf(6, 12, 18).filter { it < hours.size }
         for (i in xTickIdx) {
             val x = xAt(i.toDouble())
-            val label = if (i == lastIndex) "24" else "%02d".format(hours[i].localTime.hour)
+            val label = "%02d".format(hours[i].localTime.hour)
             val layout = tm.measure(label, axisStyle)
             drawText(
                 layout,
