@@ -97,8 +97,14 @@ fun UvChart(
         val pts = hours.mapIndexed { i, h -> Offset(xAt(i.toDouble()), yAt(h.uv)) }
         val curvePath = smoothCurvePath(pts)
 
-        // Fill: solid orange between the smooth curve and the UV=2 threshold line,
-        // clipped so only the portion above the threshold shows.
+        // Fill via curve→threshold polygon + clip:
+        //   1. Build a closed polygon that traces the curve along the top and the
+        //      threshold line along the bottom (so it includes regions where the
+        //      curve dips below UV=2).
+        //   2. Clip to the band [plotTop, thresholdY] so the parts that go below
+        //      the line are cut away.
+        // Net result: the visible fill is exactly where the curve sits above UV=2.
+        // Simpler than constructing only the above-threshold segments by hand.
         val thresholdY = yAt(SUNSCREEN_THRESHOLD)
         val fillPath = Path().apply {
             addPath(curvePath)

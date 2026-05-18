@@ -48,9 +48,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
-import java.time.ZoneId
 import java.time.temporal.ChronoUnit
-import kotlin.math.roundToInt
 
 private val Background = Color(0xFFFFFFFF)
 private val Ink = Color(0xFF111111)
@@ -207,8 +205,7 @@ private fun UvApp() {
 
 @Composable
 private fun LoadedView(loc: Location, hours: List<HourUv>, onPickLocation: () -> Unit) {
-    val zone = loc.timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() }
-        ?: ZoneId.systemDefault()
+    val zone = loc.zoneOrSystem()
     val nowAtLocation = LocalDateTime.now(zone)
     val minutesSinceStart = ChronoUnit.MINUTES.between(hours.first().localTime, nowAtLocation)
     val nowFracHour = (minutesSinceStart / 60.0).coerceIn(0.0, (hours.size - 1).toDouble())
@@ -319,24 +316,24 @@ private fun LocationPicker(
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Location>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
-    var searchError by remember { mutableStateOf<String?>(null) }
+    var searchError by remember { mutableStateOf(false) }
 
     LaunchedEffect(query) {
         val q = query.trim()
         if (q.length < 2) {
             results = emptyList()
             searching = false
-            searchError = null
+            searchError = false
             return@LaunchedEffect
         }
         searching = true
-        searchError = null
+        searchError = false
         delay(500) // debounce — keep below Nominatim's 1 req/sec policy.
         runCatching { searchLocations(q, bias) }
             .onSuccess { results = it }
             .onFailure {
                 results = emptyList()
-                searchError = ""  // any non-null sentinel; render uses stringResource.
+                searchError = true
             }
         searching = false
     }
@@ -385,11 +382,11 @@ private fun LocationPicker(
                 if (searching) {
                     item { CenterRow(stringResource(R.string.searching)) }
                 }
-                if (searchError != null) {
+                if (searchError) {
                     item { CenterRow(stringResource(R.string.search_failed), isError = true) }
                 }
                 items(results) { loc -> LocationRow(loc, onPicked) }
-                if (!searching && results.isEmpty() && searchError == null) {
+                if (!searching && results.isEmpty() && !searchError) {
                     item { CenterRow(stringResource(R.string.no_results)) }
                 }
             }
@@ -443,8 +440,5 @@ private fun CenterRow(text: String, isError: Boolean = false) {
     }
 }
 
-private fun formatUv(uv: Double): String {
-    return ((uv * 10).roundToInt() / 10.0).let {
-        if (it == it.toLong().toDouble()) "${it.toLong()}.0" else it.toString()
-    }
-}
+// Locale.ROOT so a Norwegian device doesn't render "2,3" instead of "2.3".
+private fun formatUv(uv: Double): String = "%.1f".format(java.util.Locale.ROOT, uv)

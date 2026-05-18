@@ -30,12 +30,19 @@ data class Location(
 
 data class HourUv(val localTime: LocalDateTime, val uv: Double)
 
+/** Best-effort ZoneId from a stored timezone string, falling back to the
+ *  device default when missing or unparseable. */
+fun Location.zoneOrSystem(): ZoneId =
+    timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
+
 private val json = Json { ignoreUnknownKeys = true }
 
 // Nominatim's usage policy requires a User-Agent that identifies the
 // application (default HTTP-client UAs are blocked). The package name is
 // enough; no personal contact info is embedded.
 private const val USER_AGENT = "UvIndex/1.0 (no.fyhn.uvindex)"
+
+private const val HTTP_TIMEOUT_MS = 8_000
 
 /**
  * 24 hourly UV values for the location's local calendar day (00–23).
@@ -53,7 +60,7 @@ suspend fun fetchForecast(loc: Location): List<HourUv> = withContext(Dispatchers
     val parsed = json.decodeFromString<UvResponse>(body)
     if (!parsed.ok) throw java.io.IOException("currentuvindex returned ok=false")
 
-    val zone = loc.timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
+    val zone = loc.zoneOrSystem()
     val today = LocalDate.now(zone)
 
     // Combine history + now + forecast (later sources win when hours overlap).
@@ -126,7 +133,7 @@ suspend fun searchLocations(query: String, bias: Location? = null): List<Locatio
     }
 }
 
-/** Strip numeric postcode parts and over-long suffixes from Nominatim's display_name. */
+/** Strip numeric postcode parts from Nominatim's display_name. */
 private fun cleanDisplayName(s: String): String =
     s.split(",")
         .map { it.trim() }
@@ -136,8 +143,8 @@ private fun cleanDisplayName(s: String): String =
 private fun httpGet(url: String): String {
     val conn = (URL(url).openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"
-        connectTimeout = 8_000
-        readTimeout = 8_000
+        connectTimeout = HTTP_TIMEOUT_MS
+        readTimeout = HTTP_TIMEOUT_MS
         setRequestProperty("Accept", "application/json")
         setRequestProperty("User-Agent", USER_AGENT)
     }

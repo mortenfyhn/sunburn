@@ -15,7 +15,6 @@ import kotlinx.serialization.json.Json
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.ZoneId
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "prefs")
 private val RECENTS_KEY = stringPreferencesKey("recents")
@@ -41,35 +40,31 @@ private data class CachedForecast(
 @Serializable
 private data class CachedHour(val hour: Int, val uv: Double)
 
+/** Decode the stored recents list, or empty if missing / malformed. */
+private fun Preferences.recents(): List<Location> =
+    this[RECENTS_KEY]?.let {
+        runCatching { json.decodeFromString(locationListSerializer, it) }.getOrNull()
+    }.orEmpty()
+
 class Recents(private val context: Context) {
 
     val selected: Flow<Location?> = context.dataStore.data.map { prefs ->
         prefs[SELECTED_KEY]?.let { runCatching { json.decodeFromString(Location.serializer(), it) }.getOrNull() }
     }
 
-    val list: Flow<List<Location>> = context.dataStore.data.map { prefs ->
-        prefs[RECENTS_KEY]?.let { runCatching { json.decodeFromString(locationListSerializer, it) }.getOrNull() }
-            .orEmpty()
-    }
+    val list: Flow<List<Location>> = context.dataStore.data.map { it.recents() }
 
     suspend fun select(loc: Location) {
         context.dataStore.edit { prefs ->
             prefs[SELECTED_KEY] = json.encodeToString(Location.serializer(), loc)
-            val existing = prefs[RECENTS_KEY]
-                ?.let { runCatching { json.decodeFromString(locationListSerializer, it) }.getOrNull() }
-                .orEmpty()
-            val deduped = listOf(loc) + existing.filter { !it.sameCoords(loc) }
-            val trimmed = deduped.take(MAX_RECENTS)
-            prefs[RECENTS_KEY] = json.encodeToString(locationListSerializer, trimmed)
+            val deduped = listOf(loc) + prefs.recents().filter { !it.sameCoords(loc) }
+            prefs[RECENTS_KEY] = json.encodeToString(locationListSerializer, deduped.take(MAX_RECENTS))
         }
     }
 
     suspend fun delete(loc: Location) {
         context.dataStore.edit { prefs ->
-            val existing = prefs[RECENTS_KEY]
-                ?.let { runCatching { json.decodeFromString(locationListSerializer, it) }.getOrNull() }
-                .orEmpty()
-            val filtered = existing.filter { !it.sameCoords(loc) }
+            val filtered = prefs.recents().filter { !it.sameCoords(loc) }
             prefs[RECENTS_KEY] = json.encodeToString(locationListSerializer, filtered)
         }
     }
@@ -95,8 +90,7 @@ class Recents(private val context: Context) {
         val raw = context.dataStore.data.first()[CACHE_KEY] ?: return null
         val cached = runCatching { json.decodeFromString(CachedForecast.serializer(), raw) }.getOrNull()
             ?: return null
-        if (kotlin.math.abs(loc.latitude - cached.latitude) > 1e-4) return null
-        if (kotlin.math.abs(loc.longitude - cached.longitude) > 1e-4) return null
+        if (!loc.sameCoords(cached.latitude, cached.longitude)) return null
         val today = LocalDate.now(loc.zoneOrSystem()).toString()
         if (cached.date != today) return null
         val date = LocalDate.parse(cached.date)
@@ -104,9 +98,9 @@ class Recents(private val context: Context) {
     }
 }
 
-private fun Location.zoneOrSystem(): ZoneId =
-    timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
-
 private fun Location.sameCoords(other: Location): Boolean =
-    kotlin.math.abs(latitude - other.latitude) < 1e-4 &&
-        kotlin.math.abs(longitude - other.longitude) < 1e-4
+    sameCoords(other.latitude, other.longitude)
+
+private fun Location.sameCoords(lat: Double, lon: Double): Boolean =
+    kotlin.math.abs(latitude - lat) < 1e-4 &&
+        kotlin.math.abs(longitude - lon) < 1e-4
