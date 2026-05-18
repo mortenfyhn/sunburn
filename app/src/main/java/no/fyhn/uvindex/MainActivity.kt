@@ -217,9 +217,9 @@ private fun LoadedView(loc: Location, hours: List<HourUv>, onPickLocation: () ->
     val zone = loc.zoneOrSystem()
     // Tick every 5 minutes so the hero number and "now" dot keep up with
     // wall-clock time when the app stays open. The UV curve changes slowly
-    // enough that finer granularity isn't worth the wake-ups. Composition
-    // lifecycle cancels the coroutine when the activity is in the
-    // background — no battery drain.
+    // enough that finer granularity isn't worth the wake-ups — and 5 min
+    // is cheap enough (one state write, no rendering when not visible) that
+    // we don't need to bind the timer to the activity's lifecycle.
     var nowAtLocation by remember(zone) { mutableStateOf(LocalDateTime.now(zone)) }
     LaunchedEffect(zone) {
         while (true) {
