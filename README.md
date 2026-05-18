@@ -1,13 +1,13 @@
-# UV Index
+# Sunburn
 
-A minimal Android app that shows today's UV index curve for a chosen
-location. Built to answer *do I need sunscreen today?*
+An Android app that shows today's UV index curve for a chosen location.
+Built to answer *do I need sunscreen today?*
 
-<img src="docs/screenshot.png" width="280" alt="UV Index app screenshot">
+<img src="docs/screenshot.png" width="280" alt="Sunburn app screenshot">
 
 ## Build & run
 
-Requires Android SDK with platform 35 and JDK 17
+Requires Android SDK with platform 35 and JDK 17.
 
 ```bash
 ./gradlew installDebug
