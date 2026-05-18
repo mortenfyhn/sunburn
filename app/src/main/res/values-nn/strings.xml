@@ -3,9 +3,6 @@
     <string name="app_name">Solbrend</string>
 
     <string name="title_uv_index">UV-indeks</string>
-    <string name="pick_location">Vel ein stad</string>
-    <string name="pick_location_hint">Vel ein stad for å sjå dagens UV.</string>
-    <string name="choose_location">Vel stad</string>
     <string name="loading">Lastar…</string>
     <string name="could_not_load">Klarte ikkje å hente prognosen</string>
     <string name="attribution">UV: currentuvindex.com · Søk: OpenStreetMap</string>
@@ -16,4 +13,6 @@
     <string name="searching">Søkjer…</string>
     <string name="search_failed">Søket feila</string>
     <string name="no_results">Ingen treff</string>
+
+    <string name="country_norway">Noreg</string>
 </resources>

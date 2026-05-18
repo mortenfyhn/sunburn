@@ -25,7 +25,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -46,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -79,11 +79,27 @@ class MainActivity : ComponentActivity() {
 }
 
 private sealed interface ForecastState {
-    object Idle : ForecastState
     object Loading : ForecastState
     data class Loaded(val hours: List<HourUv>) : ForecastState
     object Error : ForecastState
 }
+
+/**
+ * Seed location for a fresh install (or after clearing app data). Coords and
+ * timezone are hardcoded; country comes from a string resource so the rendered
+ * display name matches the user's locale ("Trondheim, Trøndelag, Norway" vs.
+ * "…, Norge" / "…, Noreg") — and matches what Nominatim would return if the
+ * same location were searched manually.
+ */
+private fun defaultLocation(context: android.content.Context): Location =
+    Location(
+        name = "Trondheim",
+        country = context.getString(R.string.country_norway),
+        admin1 = "Trøndelag",
+        latitude = 63.4305,
+        longitude = 10.3951,
+        timezone = "Europe/Oslo",
+    )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,14 +111,27 @@ private fun UvApp() {
     val selected by recents.selected.collectAsState(initial = null)
     val recentList by recents.list.collectAsState(initial = emptyList())
 
-    var forecast by remember { mutableStateOf<ForecastState>(ForecastState.Idle) }
+    var forecast by remember { mutableStateOf<ForecastState>(ForecastState.Loading) }
     var sheetOpen by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Seed the default location on first launch (or after clearing app data).
+    // Without this the user would see a blank/loading screen indefinitely
+    // until they manually opened the picker.
+    LaunchedEffect(Unit) {
+        val storedSelected = recents.selected.first()
+        val storedList = recents.list.first()
+        if (storedSelected == null && storedList.isEmpty()) {
+            recents.select(defaultLocation(context))
+        }
+    }
 
     LaunchedEffect(selected) {
         val s = selected
         if (s == null) {
-            forecast = ForecastState.Idle
+            // Brief window before the seed effect above writes the default.
+            // Stay in Loading; the flow re-emits once the seed lands.
+            forecast = ForecastState.Loading
             return@LaunchedEffect
         }
         // Stale-while-revalidate: show cached data immediately if we have it
@@ -132,7 +161,6 @@ private fun UvApp() {
             // Main content area — fills the screen above the bottom bar.
             Box(modifier = Modifier.weight(1f)) {
                 when (val f = forecast) {
-                    ForecastState.Idle -> EmptyState(onPickLocation = { sheetOpen = true })
                     ForecastState.Loading -> CenterMessage(stringResource(R.string.loading))
                     ForecastState.Error -> CenterMessage(
                         stringResource(R.string.could_not_load),
@@ -255,22 +283,6 @@ private fun AttributionRow() {
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
         textAlign = TextAlign.Center,
     )
-}
-
-@Composable
-private fun EmptyState(onPickLocation: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(stringResource(R.string.pick_location_hint), color = Muted)
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onPickLocation) {
-                Text(stringResource(R.string.choose_location), color = Ink)
-            }
-        }
-    }
 }
 
 @Composable

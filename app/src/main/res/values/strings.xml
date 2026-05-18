@@ -3,9 +3,6 @@
     <string name="app_name">Sunburn</string>
 
     <string name="title_uv_index">UV index</string>
-    <string name="pick_location">Pick a location</string>
-    <string name="pick_location_hint">Pick a location to see today\'s UV.</string>
-    <string name="choose_location">Choose location</string>
     <string name="loading">Loading…</string>
     <string name="could_not_load">Could not load forecast</string>
     <string name="attribution">UV: currentuvindex.com · Search: OpenStreetMap</string>
@@ -16,4 +13,8 @@
     <string name="searching">Searching…</string>
     <string name="search_failed">Search failed</string>
     <string name="no_results">No results</string>
+
+    <!-- Default location seeded on first launch. Name and admin1 are the same
+         in all three supported locales; only country needs translation. -->
+    <string name="country_norway">Norway</string>
 </resources>
