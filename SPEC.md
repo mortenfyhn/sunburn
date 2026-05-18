@@ -15,7 +15,15 @@ today's UV index curve for one chosen location.
 - **UV > 2 filled orange.** No gradient. Threshold is fixed at 2.0.
 - **Curve spans 00–24** but the x-axis only labels `06 / 12 / 18` —
   the day's edges are obviously zero.
-- **Y-axis labels every integer**, minimum range 0–3.
+- **Y-axis is just `0` and `2`.** No gridlines, no other ticks. The
+  threshold `2` is tagged directly onto the orange fill's left edge
+  (direct labelling) rather than as a free-floating axis tick. Falls
+  back to the axis when there's no crossing today.
+- **Peak value floats above the apex**, replacing y-axis ticks for
+  the top of the range.
+- **Current value floats above the now-dot**, larger than the peak
+  label since it's the primary reading. Peak label is suppressed when
+  the now-dot sits on the peak (within an hour) to avoid overlap.
 - **Location picker at the bottom** — thumb-reachable on tall phones.
 - **Stale-while-revalidate cache:** today's cached forecast renders
   instantly and stays visible if the refresh fails. One successful

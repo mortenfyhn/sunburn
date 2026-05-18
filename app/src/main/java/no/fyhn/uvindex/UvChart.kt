@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.ceil
 import kotlin.math.max
+import java.util.Locale
 
 private val Ink = Color(0xFF111111)
 private val Sunburn = Color(0xFFEFA572)  // warm orange for UV > threshold
@@ -31,19 +32,21 @@ fun UvChart(
 ) {
     val tm: TextMeasurer = rememberTextMeasurer()
     val axisStyle = TextStyle(color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+    val peakStyle = TextStyle(color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+    // The current value is the primary reading; size it larger than the peak.
+    val nowStyle = TextStyle(color = Ink, fontSize = 22.sp, fontWeight = FontWeight.Medium)
 
     Canvas(modifier = modifier) {
         if (hours.size < 2) return@Canvas
 
         val maxUv = hours.maxOf { it.uv }
-        // Top out at the next integer at-or-above the day's peak (min 3 so the chart
-        // doesn't get absurdly squashed when UV is near zero).
         val yMax = max(3.0, ceil(maxUv))
 
-        val leftPad = 40.dp.toPx()
+        val leftPad = 32.dp.toPx()
         val rightPad = 8.dp.toPx()
-        val topPad = 8.dp.toPx()
-        val bottomPad = 32.dp.toPx()
+        // Generous top padding to fit the floating peak label above the apex.
+        val topPad = 28.dp.toPx()
+        val bottomPad = 28.dp.toPx()
 
         val plotLeft = leftPad
         val plotRight = size.width - rightPad
@@ -62,23 +65,48 @@ fun UvChart(
             return plotBottom - frac.toFloat() * plotH
         }
 
-        // Y-axis: a label at every integer up to yMax.
-        val yTicks = (0..yMax.toInt()).toList()
-        for (v in yTicks) {
-            val y = yAt(v.toDouble())
-            val layout = tm.measure(v.toString(), axisStyle)
+        val thresholdY = yAt(SUNSCREEN_THRESHOLD)
+
+        // Y-axis "0": stays at the left edge — the flat-zero shoulders of the
+        // curve sit right on it, so it's already touching the data it labels.
+        run {
+            val layout = tm.measure("0", axisStyle)
             drawText(
                 layout,
                 topLeft = Offset(
-                    x = plotLeft - layout.size.width - 12.dp.toPx(),
-                    y = y - layout.size.height / 2f,
+                    x = plotLeft - layout.size.width - 10.dp.toPx(),
+                    y = yAt(0.0) - layout.size.height / 2f,
                 ),
             )
         }
 
-        // X-axis: label the daytime quarters only. The chart still spans 0..24h
-        // edge to edge — the 00 and 24 labels were noisy and redundant since
-        // the curve visibly bottoms out at zero there.
+        // Threshold "2": labelled directly on the orange fill's lower edge,
+        // just left of where the curve first crosses the threshold going up.
+        // Direct labelling — the value touches the line it names. Fall back
+        // to the y-axis if the curve never crosses 2 today (no orange fill,
+        // no inline anchor, but the scale still wants its label).
+        val asc = (1 until hours.size).firstOrNull { i ->
+            hours[i - 1].uv < SUNSCREEN_THRESHOLD && hours[i].uv >= SUNSCREEN_THRESHOLD
+        }
+        run {
+            val twoLabel = SUNSCREEN_THRESHOLD.toInt().toString()
+            val layout = tm.measure(twoLabel, axisStyle)
+            val (lx, ly) = if (asc != null) {
+                val prev = hours[asc - 1].uv
+                val curr = hours[asc].uv
+                val t = (SUNSCREEN_THRESHOLD - prev) / (curr - prev)
+                val crossingX = xAt((asc - 1) + t)
+                (crossingX - layout.size.width - 6.dp.toPx()) to
+                    (thresholdY - layout.size.height / 2f)
+            } else {
+                (plotLeft - layout.size.width - 10.dp.toPx()) to
+                    (thresholdY - layout.size.height / 2f)
+            }
+            drawText(layout, topLeft = Offset(lx, ly))
+        }
+
+        // X-axis: daytime quarters only. 00 and 24 are obvious from the curve
+        // bottoming out at zero at both edges.
         val xTickIdx = listOf(6, 12, 18).filter { it < hours.size }
         for (i in xTickIdx) {
             val x = xAt(i.toDouble())
@@ -88,24 +116,17 @@ fun UvChart(
                 layout,
                 topLeft = Offset(
                     x = x - layout.size.width / 2f,
-                    y = plotBottom + 12.dp.toPx(),
+                    y = plotBottom + 10.dp.toPx(),
                 ),
             )
         }
 
-        // Smooth curve through 24 points
+        // Smooth curve through the points
         val pts = hours.mapIndexed { i, h -> Offset(xAt(i.toDouble()), yAt(h.uv)) }
         val curvePath = smoothCurvePath(pts)
 
-        // Fill via curve→threshold polygon + clip:
-        //   1. Build a closed polygon that traces the curve along the top and the
-        //      threshold line along the bottom (so it includes regions where the
-        //      curve dips below UV=2).
-        //   2. Clip to the band [plotTop, thresholdY] so the parts that go below
-        //      the line are cut away.
-        // Net result: the visible fill is exactly where the curve sits above UV=2.
-        // Simpler than constructing only the above-threshold segments by hand.
-        val thresholdY = yAt(SUNSCREEN_THRESHOLD)
+        // Fill above threshold: build a curve→threshold polygon and clip the
+        // band [plotTop, thresholdY] so only the above-threshold region remains.
         val fillPath = Path().apply {
             addPath(curvePath)
             lineTo(pts.last().x, thresholdY)
@@ -124,15 +145,54 @@ fun UvChart(
         // Curve
         drawPath(curvePath, color = Ink, style = Stroke(width = 2.5.dp.toPx()))
 
-        // "Now" marker dot
+        // Peak label floating above the apex — replaces the y-axis ticks that
+        // used to show the day's top value. Suppressed when the now-dot is
+        // sitting on the peak (within an hour), since the now-label already
+        // reports the same value at the same point and the two would overlap.
+        val peakIdx = hours.indexOfFirst { it.uv == maxUv }
+        val nowVisible = nowFracHour in 0.0..lastIndex.toDouble()
+        val nowAtPeak = nowVisible && kotlin.math.abs(nowFracHour - peakIdx) < 1.0
+        if (peakIdx >= 0 && !nowAtPeak) {
+            val peakX = xAt(peakIdx.toDouble())
+            val peakY = yAt(maxUv)
+            val peakText = formatUvLabel(maxUv)
+            val layout = tm.measure(peakText, peakStyle)
+            drawText(
+                layout,
+                topLeft = Offset(
+                    x = (peakX - layout.size.width / 2f)
+                        .coerceIn(plotLeft, plotRight - layout.size.width),
+                    y = peakY - layout.size.height - 6.dp.toPx(),
+                ),
+            )
+        }
+
+        // "Now" marker: solid dot with a thin white halo (so it stays visible
+        // on top of the curve stroke), plus the current value floating above
+        // — mirrors the peak label's placement so both annotations read the
+        // same way.
         if (nowFracHour in 0.0..lastIndex.toDouble()) {
+            val nowUv = interpolatedUv(hours, nowFracHour)
             val nowX = xAt(nowFracHour)
-            val nowY = yAt(interpolatedUv(hours, nowFracHour))
-            drawCircle(color = Ink, radius = 7.dp.toPx(), center = Offset(nowX, nowY))
-            drawCircle(color = Color.White, radius = 3.5.dp.toPx(), center = Offset(nowX, nowY))
+            val nowY = yAt(nowUv)
+            drawCircle(color = Color.White, radius = 6.5.dp.toPx(), center = Offset(nowX, nowY))
+            drawCircle(color = Ink, radius = 4.5.dp.toPx(), center = Offset(nowX, nowY))
+
+            val nowText = formatUvLabel(nowUv)
+            val layout = tm.measure(nowText, nowStyle)
+            drawText(
+                layout,
+                topLeft = Offset(
+                    x = (nowX - layout.size.width / 2f)
+                        .coerceIn(plotLeft, plotRight - layout.size.width),
+                    y = nowY - layout.size.height - 6.dp.toPx(),
+                ),
+            )
         }
     }
 }
+
+private fun formatUvLabel(uv: Double): String = "%.1f".format(Locale.ROOT, uv)
 
 fun interpolatedUv(hours: List<HourUv>, fracHour: Double): Double {
     if (hours.isEmpty()) return 0.0

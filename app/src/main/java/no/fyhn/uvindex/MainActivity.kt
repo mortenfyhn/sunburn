@@ -50,7 +50,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
-import java.util.Locale
 
 private val Background = Color(0xFFFFFFFF)
 private val Ink = Color(0xFF111111)
@@ -215,11 +214,11 @@ private fun UvApp() {
 @Composable
 private fun LoadedView(loc: Location, hours: List<HourUv>, onPickLocation: () -> Unit) {
     val zone = loc.zoneOrSystem()
-    // Tick every 5 minutes so the hero number and "now" dot keep up with
-    // wall-clock time when the app stays open. The UV curve changes slowly
-    // enough that finer granularity isn't worth the wake-ups — and 5 min
-    // is cheap enough (one state write, no rendering when not visible) that
-    // we don't need to bind the timer to the activity's lifecycle.
+    // Tick every 5 minutes so the "now" dot keeps up with wall-clock time
+    // when the app stays open. The UV curve changes slowly enough that finer
+    // granularity isn't worth the wake-ups — and 5 min is cheap enough (one
+    // state write, no rendering when not visible) that we don't need to bind
+    // the timer to the activity's lifecycle.
     var nowAtLocation by remember(zone) { mutableStateOf(LocalDateTime.now(zone)) }
     LaunchedEffect(zone) {
         while (true) {
@@ -229,12 +228,11 @@ private fun LoadedView(loc: Location, hours: List<HourUv>, onPickLocation: () ->
     }
     val minutesSinceStart = ChronoUnit.MINUTES.between(hours.first().localTime, nowAtLocation)
     val nowFracHour = (minutesSinceStart / 60.0).coerceIn(0.0, (hours.size - 1).toDouble())
-    val nowUv = interpolatedUv(hours, nowFracHour)
 
-    // Three equal weight spacers — above the chart, between the chart and the
-    // location row, and below the location row — so the chart sits in the
-    // upper portion and the location picker sits centred in the space between
-    // the chart and the attribution (which lives in the outer Column).
+    // The chart sits roughly in the upper third; the location picker is
+    // centred between the chart and the bottom attribution. Current value
+    // lives next to the now-dot, peak value floats on the curve — the small
+    // "UV index" label above is just a name for what's plotted.
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -247,22 +245,14 @@ private fun LoadedView(loc: Location, hours: List<HourUv>, onPickLocation: () ->
             fontSize = 18.sp,
             fontWeight = FontWeight.Medium,
         )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = formatUv(nowUv),
-            fontSize = 56.sp,
-            fontWeight = FontWeight.Light,
-            color = Ink,
-        )
-
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(12.dp))
 
         UvChart(
             hours = hours,
             nowFracHour = nowFracHour,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(320.dp),
+                .height(220.dp),
         )
 
         Spacer(Modifier.weight(1f))
@@ -463,6 +453,3 @@ private fun CenterRow(text: String, isError: Boolean = false) {
         Text(text, color = if (isError) Color(0xFFC22E2E) else Muted)
     }
 }
-
-// Locale.ROOT so a Norwegian device doesn't render "2,3" instead of "2.3".
-private fun formatUv(uv: Double): String = "%.1f".format(Locale.ROOT, uv)
