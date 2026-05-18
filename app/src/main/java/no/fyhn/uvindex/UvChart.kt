@@ -125,12 +125,16 @@ fun UvChart(
         val pts = hours.mapIndexed { i, h -> Offset(xAt(i.toDouble()), yAt(h.uv)) }
         val curvePath = smoothCurvePath(pts)
 
-        // Fill above threshold: build a curve→threshold polygon and clip the
+        // Fill above threshold: build a curve→plotBottom polygon and clip the
         // band [plotTop, thresholdY] so only the above-threshold region remains.
+        // The polygon's bottom edge sits at plotBottom — well below the clip
+        // line — so the clip produces a clean cut. If the polygon's bottom edge
+        // were at thresholdY (i.e. on the clip boundary), AA would leave a
+        // faint partial-opacity row across the full chart width at uv = 2.
         val fillPath = Path().apply {
             addPath(curvePath)
-            lineTo(pts.last().x, thresholdY)
-            lineTo(pts.first().x, thresholdY)
+            lineTo(pts.last().x, plotBottom)
+            lineTo(pts.first().x, plotBottom)
             close()
         }
         clipRect(
