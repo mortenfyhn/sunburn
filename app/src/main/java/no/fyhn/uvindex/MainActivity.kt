@@ -215,7 +215,18 @@ private fun UvApp() {
 @Composable
 private fun LoadedView(loc: Location, hours: List<HourUv>, onPickLocation: () -> Unit) {
     val zone = loc.zoneOrSystem()
-    val nowAtLocation = LocalDateTime.now(zone)
+    // Tick every 5 minutes so the hero number and "now" dot keep up with
+    // wall-clock time when the app stays open. The UV curve changes slowly
+    // enough that finer granularity isn't worth the wake-ups. Composition
+    // lifecycle cancels the coroutine when the activity is in the
+    // background — no battery drain.
+    var nowAtLocation by remember(zone) { mutableStateOf(LocalDateTime.now(zone)) }
+    LaunchedEffect(zone) {
+        while (true) {
+            delay(5 * 60_000L)
+            nowAtLocation = LocalDateTime.now(zone)
+        }
+    }
     val minutesSinceStart = ChronoUnit.MINUTES.between(hours.first().localTime, nowAtLocation)
     val nowFracHour = (minutesSinceStart / 60.0).coerceIn(0.0, (hours.size - 1).toDouble())
     val nowUv = interpolatedUv(hours, nowFracHour)
