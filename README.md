@@ -7,7 +7,7 @@ location. Built to answer *do I need sunscreen today?*
 
 ## Build & run
 
-Requires Android SDK with platform 35 and JDK 17.
+Requires Android SDK with platform 35 and JDK 17
 
 ```bash
 ./gradlew installDebug
@@ -15,5 +15,5 @@ Requires Android SDK with platform 35 and JDK 17.
 
 ## Data
 
-- UV index: [currentuvindex.com](https://currentuvindex.com) (CC BY 4.0) — matches yr.no within ≤ 0.1 in spot checks.
-- Location search: [Nominatim](https://nominatim.openstreetmap.org/) / OpenStreetMap (ODbL).
+- UV index: [currentuvindex.com](https://currentuvindex.com) (CC BY 4.0)
+- Location search: [Nominatim](https://nominatim.openstreetmap.org/) / OpenStreetMap (ODbL)
