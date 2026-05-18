@@ -74,6 +74,20 @@ android {
     }
 }
 
+// Name the release APK after the app + git-describe version, e.g.
+// sunburn-v0.1.apk on a tagged build or sunburn-v0.1-3-gabc1234-dirty.apk
+// off-tag — much friendlier than the default app-release.apk when sideloading.
+// Uses the legacy applicationVariants API because outputFileName isn't yet
+// exposed on the modern variant.outputs in AGP 8.7.
+android.applicationVariants.all {
+    if (buildType.name == "release") {
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl)
+                .outputFileName = "sunburn-$gitDescribe.apk"
+        }
+    }
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
