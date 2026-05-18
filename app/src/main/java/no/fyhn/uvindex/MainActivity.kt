@@ -138,18 +138,19 @@ private fun UvApp() {
                         stringResource(R.string.could_not_load),
                         isError = true,
                     )
-                    is ForecastState.Loaded -> LoadedView(loc = selected!!, hours = f.hours)
+                    is ForecastState.Loaded -> LoadedView(
+                        loc = selected!!,
+                        hours = f.hours,
+                        onPickLocation = { sheetOpen = true },
+                    )
                 }
             }
 
-            // Bottom: location row (thumb-reachable) + attribution. Hidden when
-            // no location has been picked yet (the empty state already prompts).
+            // Attribution stays at the bottom for every state where a location
+            // is selected. The location picker now lives inside LoadedView
+            // (centred between chart and attribution) — easier to reach with
+            // a thumb than the original top-bar position.
             if (selected != null) {
-                LocationRowBar(
-                    name = selected!!.displayName,
-                    onClick = { sheetOpen = true },
-                )
-                Spacer(Modifier.height(8.dp))
                 AttributionRow()
             }
         }
@@ -177,7 +178,7 @@ private fun UvApp() {
 }
 
 @Composable
-private fun LoadedView(loc: Location, hours: List<HourUv>) {
+private fun LoadedView(loc: Location, hours: List<HourUv>, onPickLocation: () -> Unit) {
     val zone = loc.timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() }
         ?: ZoneId.systemDefault()
     val nowAtLocation = LocalDateTime.now(zone)
@@ -185,12 +186,14 @@ private fun LoadedView(loc: Location, hours: List<HourUv>) {
     val nowFracHour = (minutesSinceStart / 60.0).coerceIn(0.0, (hours.size - 1).toDouble())
     val nowUv = interpolatedUv(hours, nowFracHour)
 
+    // Three equal weight spacers — above the chart, between the chart and the
+    // location row, and below the location row — so the chart sits in the
+    // upper portion and the location picker sits centred in the space between
+    // the chart and the attribution (which lives in the outer Column).
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Top white space — vertical centring of the chart block within the
-        // content area.
         Spacer(Modifier.weight(1f))
 
         Text(
@@ -216,6 +219,10 @@ private fun LoadedView(loc: Location, hours: List<HourUv>) {
                 .fillMaxWidth()
                 .height(320.dp),
         )
+
+        Spacer(Modifier.weight(1f))
+
+        LocationRowBar(name = loc.displayName, onClick = onPickLocation)
 
         Spacer(Modifier.weight(1f))
     }
