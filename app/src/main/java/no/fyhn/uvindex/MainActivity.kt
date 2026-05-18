@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,7 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -79,7 +82,7 @@ private sealed interface ForecastState {
     object Idle : ForecastState
     object Loading : ForecastState
     data class Loaded(val hours: List<HourUv>) : ForecastState
-    data class Error(val message: String) : ForecastState
+    object Error : ForecastState
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,10 +117,8 @@ private fun UvApp() {
                 forecast = ForecastState.Loaded(it)
                 recents.saveCache(s, it)
             }
-            .onFailure { e ->
-                if (cached == null) {
-                    forecast = ForecastState.Error(e.message ?: "Could not load forecast")
-                }
+            .onFailure {
+                if (cached == null) forecast = ForecastState.Error
             }
     }
 
@@ -128,32 +129,28 @@ private fun UvApp() {
                 .padding(padding)
                 .padding(horizontal = 16.dp),
         ) {
-            // Top bar — tap anywhere to change location.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { sheetOpen = true }
-                    .padding(top = 16.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = selected?.displayName ?: "Pick a location",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Ink,
-                )
-                Text(
-                    text = " ▾",
-                    fontSize = 16.sp,
-                    color = Muted,
-                )
+            // Main content area — fills the screen above the bottom bar.
+            Box(modifier = Modifier.weight(1f)) {
+                when (val f = forecast) {
+                    ForecastState.Idle -> EmptyState(onPickLocation = { sheetOpen = true })
+                    ForecastState.Loading -> CenterMessage(stringResource(R.string.loading))
+                    ForecastState.Error -> CenterMessage(
+                        stringResource(R.string.could_not_load),
+                        isError = true,
+                    )
+                    is ForecastState.Loaded -> LoadedView(loc = selected!!, hours = f.hours)
+                }
             }
 
-            when (val f = forecast) {
-                ForecastState.Idle -> EmptyState(onPickLocation = { sheetOpen = true })
-                ForecastState.Loading -> CenterMessage("Loading…")
-                is ForecastState.Error -> CenterMessage(f.message, isError = true)
-                is ForecastState.Loaded -> LoadedView(loc = selected!!, hours = f.hours)
+            // Bottom: location row (thumb-reachable) + attribution. Hidden when
+            // no location has been picked yet (the empty state already prompts).
+            if (selected != null) {
+                LocationRowBar(
+                    name = selected!!.displayName,
+                    onClick = { sheetOpen = true },
+                )
+                Spacer(Modifier.height(8.dp))
+                AttributionRow()
             }
         }
     }
@@ -192,11 +189,12 @@ private fun LoadedView(loc: Location, hours: List<HourUv>) {
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Pushes the chart block toward vertical centre.
+        // Top white space — vertical centring of the chart block within the
+        // content area.
         Spacer(Modifier.weight(1f))
 
         Text(
-            "UV index",
+            stringResource(R.string.title_uv_index),
             color = Ink,
             fontSize = 18.sp,
             fontWeight = FontWeight.Medium,
@@ -220,15 +218,36 @@ private fun LoadedView(loc: Location, hours: List<HourUv>) {
         )
 
         Spacer(Modifier.weight(1f))
-
-        // Attributions: CC BY 4.0 for UV data, ODbL for OSM search.
-        Text(
-            text = "UV: currentuvindex.com · Search: OpenStreetMap",
-            color = Muted,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(bottom = 16.dp),
-        )
     }
+}
+
+@Composable
+private fun LocationRowBar(name: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Text(text = name, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Ink)
+        Text(text = " ▾", fontSize = 16.sp, color = Muted)
+    }
+}
+
+@Composable
+private fun AttributionRow() {
+    // CC BY 4.0 (currentuvindex.com) and ODbL (OpenStreetMap/Nominatim) both
+    // require visible attribution. Keeping it on the main screen avoids having
+    // to add an About screen for what is otherwise a one-screen app.
+    Text(
+        text = stringResource(R.string.attribution),
+        color = Muted,
+        fontSize = 11.sp,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable
@@ -238,10 +257,10 @@ private fun EmptyState(onPickLocation: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Pick a location to see today's UV.", color = Muted)
+            Text(stringResource(R.string.pick_location_hint), color = Muted)
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onPickLocation) {
-                Text("Choose location", color = Ink)
+                Text(stringResource(R.string.choose_location), color = Ink)
             }
         }
     }
@@ -288,7 +307,7 @@ private fun LocationPicker(
             .onSuccess { results = it }
             .onFailure {
                 results = emptyList()
-                searchError = it.message ?: "Search failed"
+                searchError = ""  // any non-null sentinel; render uses stringResource.
             }
         searching = false
     }
@@ -303,7 +322,7 @@ private fun LocationPicker(
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Search city…", color = Muted) },
+            placeholder = { Text(stringResource(R.string.search_city), color = Muted) },
             singleLine = true,
         )
 
@@ -315,7 +334,7 @@ private fun LocationPicker(
                 if (recents.isEmpty()) {
                     item {
                         Text(
-                            "Type a city name to search.",
+                            stringResource(R.string.type_city_name),
                             color = Muted,
                             modifier = Modifier.padding(vertical = 16.dp),
                         )
@@ -323,7 +342,7 @@ private fun LocationPicker(
                 } else {
                     item {
                         Text(
-                            "Recent",
+                            stringResource(R.string.recent),
                             color = Muted,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(vertical = 8.dp),
@@ -335,14 +354,14 @@ private fun LocationPicker(
                 }
             } else {
                 if (searching) {
-                    item { CenterRow("Searching…") }
+                    item { CenterRow(stringResource(R.string.searching)) }
                 }
-                searchError?.let { err ->
-                    item { CenterRow(err, isError = true) }
+                if (searchError != null) {
+                    item { CenterRow(stringResource(R.string.search_failed), isError = true) }
                 }
                 items(results) { loc -> LocationRow(loc, onPicked) }
                 if (!searching && results.isEmpty() && searchError == null) {
-                    item { CenterRow("No results") }
+                    item { CenterRow(stringResource(R.string.no_results)) }
                 }
             }
         }
