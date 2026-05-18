@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -146,6 +147,11 @@ private fun UvApp() {
                 recents.saveCache(s, it)
             }
             .onFailure {
+                // runCatching catches Throwable, including CancellationException
+                // thrown when the parent LaunchedEffect restarts (e.g. user
+                // switches location quickly). Without rethrowing we'd flash
+                // "Could not load" from a coroutine that's no longer current.
+                if (it is CancellationException) throw it
                 if (cached == null) forecast = ForecastState.Error
             }
     }
@@ -333,6 +339,10 @@ private fun LocationPicker(
         runCatching { searchLocations(q, bias) }
             .onSuccess { results = it }
             .onFailure {
+                // Same trap as in UvApp's LaunchedEffect(selected): rethrow
+                // CancellationException so a typing-fast user doesn't flash
+                // "Search failed" from a stale request.
+                if (it is CancellationException) throw it
                 results = emptyList()
                 searchError = true
             }
