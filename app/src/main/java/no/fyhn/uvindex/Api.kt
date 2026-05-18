@@ -139,7 +139,7 @@ suspend fun searchLocations(query: String, bias: Location? = null): List<Locatio
             longitude = r.lon.toDouble(),
             timezone = null,
         )
-    }
+    }.distinctBy { it.displayName }
 }
 
 private val POSTCODE = Regex("""\d{3,6}""")

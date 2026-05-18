@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
 
 private sealed interface ForecastState {
     object Loading : ForecastState
-    data class Loaded(val hours: List<HourUv>) : ForecastState
+    data class Loaded(val loc: Location, val hours: List<HourUv>) : ForecastState
     object Error : ForecastState
 }
 
@@ -141,10 +141,10 @@ private fun UvApp() {
         // cache silently — surfacing an error would be noise when the user
         // already has usable data on screen.
         val cached = recents.loadCache(s)
-        forecast = if (cached != null) ForecastState.Loaded(cached) else ForecastState.Loading
+        forecast = if (cached != null) ForecastState.Loaded(s, cached) else ForecastState.Loading
         runCatching { fetchForecast(s, cached) }
             .onSuccess {
-                forecast = ForecastState.Loaded(it)
+                forecast = ForecastState.Loaded(s, it)
                 recents.saveCache(s, it)
             }
             .onFailure {
@@ -173,7 +173,7 @@ private fun UvApp() {
                         isError = true,
                     )
                     is ForecastState.Loaded -> LoadedView(
-                        loc = selected!!,
+                        loc = f.loc,
                         hours = f.hours,
                         onPickLocation = { sheetOpen = true },
                     )
@@ -355,8 +355,8 @@ private fun LocationPicker(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 520.dp)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .imePadding()
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
     ) {
         OutlinedTextField(
             value = query,
