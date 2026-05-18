@@ -1,3 +1,5 @@
+[![Build Status](https://fyhn.semaphoreci.com/badges/sunburn/branches/master.svg?key=5fe10ac9-b5d4-45c2-b926-adfb7288a2c2)](https://fyhn.semaphoreci.com/projects/sunburn)
+
 # Sunburn
 
 An Android app that shows today's UV index curve for a chosen location.
