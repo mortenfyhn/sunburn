@@ -276,13 +276,23 @@ private fun AttributionRow() {
     // CC BY 4.0 (currentuvindex.com) and ODbL (OpenStreetMap/Nominatim) both
     // require visible attribution. Keeping it on the main screen avoids having
     // to add an About screen for what is otherwise a one-screen app.
-    Text(
-        text = stringResource(R.string.attribution),
-        color = Muted,
-        fontSize = 11.sp,
+    Column(
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-        textAlign = TextAlign.Center,
-    )
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = stringResource(R.string.attribution),
+            color = Muted,
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = BuildConfig.GIT_DESCRIBE,
+            color = Muted,
+            fontSize = 10.sp,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 @Composable

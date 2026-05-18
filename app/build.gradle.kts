@@ -5,6 +5,18 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+// `git describe` output baked into the APK at build time. On a tagged build
+// this is just the tag (e.g. "v0.1"); on a development commit it carries the
+// nearest tag, distance, short SHA, and a `-dirty` suffix when the working
+// tree has uncommitted changes. Uses providers.exec (not ProcessBuilder) so
+// the configuration cache treats it as a tracked input rather than an
+// untracked external process.
+val gitDescribe: String = providers.exec {
+    commandLine("git", "describe", "--tags", "--dirty", "--always", "--abbrev=7")
+    workingDir = rootDir
+    isIgnoreExitValue = true
+}.standardOutput.asText.map { it.trim() }.getOrElse("").ifEmpty { "dev" }
+
 android {
     namespace = "no.fyhn.uvindex"
     compileSdk = 35
@@ -14,7 +26,8 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "0.1"
+        buildConfigField("String", "GIT_DESCRIBE", "\"$gitDescribe\"")
     }
 
     buildTypes {
@@ -36,6 +49,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true  // needed for the GIT_DESCRIBE constant above
     }
 
     // Don't run lint during normal debug builds; invoke `./gradlew lint` explicitly when needed.
