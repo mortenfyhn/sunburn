@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
+import java.util.Locale
 
 private val Background = Color(0xFFFFFFFF)
 private val Ink = Color(0xFF111111)
@@ -441,4 +442,4 @@ private fun CenterRow(text: String, isError: Boolean = false) {
 }
 
 // Locale.ROOT so a Norwegian device doesn't render "2,3" instead of "2.3".
-private fun formatUv(uv: Double): String = "%.1f".format(java.util.Locale.ROOT, uv)
+private fun formatUv(uv: Double): String = "%.1f".format(Locale.ROOT, uv)
