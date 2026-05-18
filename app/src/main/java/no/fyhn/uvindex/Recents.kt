@@ -66,6 +66,17 @@ class Recents(private val context: Context) {
         context.dataStore.edit { prefs ->
             val filtered = prefs.recents().filter { !it.sameCoords(loc) }
             prefs[RECENTS_KEY] = json.encodeToString(locationListSerializer, filtered)
+            // If the deleted entry was the currently-selected one, clear
+            // SELECTED_KEY too. The persistent seed collector in UvApp will
+            // see selected = null and either jump to the next recent or
+            // reseed the default, keeping "displayed location is in the
+            // recents list" as a true invariant.
+            val current = prefs[SELECTED_KEY]?.let {
+                runCatching { json.decodeFromString(Location.serializer(), it) }.getOrNull()
+            }
+            if (current != null && current.sameCoords(loc)) {
+                prefs.remove(SELECTED_KEY)
+            }
         }
     }
 

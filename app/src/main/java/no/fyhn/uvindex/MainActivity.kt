@@ -115,14 +115,16 @@ private fun UvApp() {
     var sheetOpen by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Seed the default location on first launch (or after clearing app data).
-    // Without this the user would see a blank/loading screen indefinitely
-    // until they manually opened the picker.
+    // Keep `selected` non-null for the lifetime of the composition. On fresh
+    // install the underlying DataStore emits null and we seed Trondheim; if
+    // the user later deletes their currently-selected recent we'll see null
+    // again and either jump to the new top of the list or reseed.
     LaunchedEffect(Unit) {
-        val storedSelected = recents.selected.first()
-        val storedList = recents.list.first()
-        if (storedSelected == null && storedList.isEmpty()) {
-            recents.select(defaultLocation(context))
+        recents.selected.collect { sel ->
+            if (sel == null) {
+                val firstRecent = recents.list.first().firstOrNull()
+                recents.select(firstRecent ?: defaultLocation(context))
+            }
         }
     }
 
