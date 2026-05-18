@@ -1,0 +1,52 @@
+version: v1.0
+name: Sunburn
+
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu2204
+
+blocks:
+  - name: Test & build
+    task:
+      env_vars:
+        # Android SDK lives under $HOME so we can cache it across jobs without
+        # pulling ~3GB on every run. JDK comes from sem-version (system path).
+        - name: ANDROID_HOME
+          value: /home/semaphore/android-sdk
+        # Gradle daemon costs more than it saves on CI: each job is a fresh VM,
+        # so the daemon has no warm state to amortise — just JVM overhead.
+        - name: GRADLE_OPTS
+          value: "-Xmx2g -Dorg.gradle.daemon=false"
+      prologue:
+        commands:
+          - checkout
+          # `git describe --tags` is baked into the APK as versionName. The
+          # default Semaphore checkout is shallow and tag-free; fetch tags so
+          # tagged builds report e.g. "v0.1" instead of a bare SHA.
+          - git fetch --tags --force
+          - sem-version java 17
+          - cache restore android-sdk-35
+          - cache restore gradle-$(checksum gradle/wrapper/gradle-wrapper.properties)
+          # Install cmdline-tools + platform 35 if cache missed.
+          - |
+            if [ ! -d "$ANDROID_HOME/platforms/android-35" ]; then
+              mkdir -p $ANDROID_HOME/cmdline-tools
+              curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/tools.zip
+              unzip -q /tmp/tools.zip -d $ANDROID_HOME/cmdline-tools
+              mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+              yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null
+              $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+                "platforms;android-35" "build-tools;35.0.0" "platform-tools" >/dev/null
+            fi
+          - export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+      jobs:
+        - name: Test & assembleDebug
+          commands:
+            - ./gradlew test assembleDebug
+            - artifact push workflow app/build/outputs/apk/debug/app-debug.apk
+      epilogue:
+        on_pass:
+          commands:
+            - cache store android-sdk-35 $ANDROID_HOME
+            - cache store gradle-$(checksum gradle/wrapper/gradle-wrapper.properties) ~/.gradle/caches
