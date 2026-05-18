@@ -133,11 +133,13 @@ suspend fun searchLocations(query: String, bias: Location? = null): List<Locatio
     }
 }
 
+private val POSTCODE = Regex("""\d{3,6}""")
+
 /** Strip numeric postcode parts from Nominatim's display_name. */
 private fun cleanDisplayName(s: String): String =
     s.split(",")
         .map { it.trim() }
-        .filter { it.isNotEmpty() && !it.matches(Regex("\\d{3,6}")) }
+        .filter { it.isNotEmpty() && !POSTCODE.matches(it) }
         .joinToString(", ")
 
 private fun httpGet(url: String): String {

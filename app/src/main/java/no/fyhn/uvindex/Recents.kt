@@ -91,10 +91,9 @@ class Recents(private val context: Context) {
         val cached = runCatching { json.decodeFromString(CachedForecast.serializer(), raw) }.getOrNull()
             ?: return null
         if (!loc.sameCoords(cached.latitude, cached.longitude)) return null
-        val today = LocalDate.now(loc.zoneOrSystem()).toString()
-        if (cached.date != today) return null
-        val date = LocalDate.parse(cached.date)
-        return cached.hours.map { HourUv(LocalDateTime.of(date, LocalTime.of(it.hour, 0)), it.uv) }
+        val today = LocalDate.now(loc.zoneOrSystem())
+        if (cached.date != today.toString()) return null
+        return cached.hours.map { HourUv(LocalDateTime.of(today, LocalTime.of(it.hour, 0)), it.uv) }
     }
 }
 
