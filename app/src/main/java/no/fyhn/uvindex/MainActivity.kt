@@ -102,12 +102,23 @@ private fun UvApp() {
             forecast = ForecastState.Idle
             return@LaunchedEffect
         }
-        forecast = ForecastState.Loading
-        forecast = runCatching { fetchForecast(s) }
-            .fold(
-                onSuccess = { ForecastState.Loaded(it) },
-                onFailure = { ForecastState.Error(it.message ?: "Could not load forecast") },
-            )
+        // Stale-while-revalidate: show cached data immediately if we have it
+        // (so the app works offline if today's forecast was fetched earlier),
+        // then try to refresh in the background. On refresh failure keep the
+        // cache silently — surfacing an error would be noise when the user
+        // already has usable data on screen.
+        val cached = recents.loadCache(s)
+        forecast = if (cached != null) ForecastState.Loaded(cached) else ForecastState.Loading
+        runCatching { fetchForecast(s) }
+            .onSuccess {
+                forecast = ForecastState.Loaded(it)
+                recents.saveCache(s, it)
+            }
+            .onFailure { e ->
+                if (cached == null) {
+                    forecast = ForecastState.Error(e.message ?: "Could not load forecast")
+                }
+            }
     }
 
     Scaffold(containerColor = Background) { padding ->
@@ -185,23 +196,20 @@ private fun LoadedView(loc: Location, hours: List<HourUv>) {
         Spacer(Modifier.weight(1f))
 
         Text(
+            "UV index",
+            color = Ink,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
             text = formatUv(nowUv),
             fontSize = 56.sp,
             fontWeight = FontWeight.Light,
             color = Ink,
         )
 
-        Spacer(Modifier.height(16.dp))
-
-        // "UV index" acts as the y-axis title — left-aligned above the chart's
-        // numeric ticks (0/2/4) rather than centred above the hero number.
-        Text(
-            "UV index",
-            color = Muted,
-            fontSize = 13.sp,
-            modifier = Modifier.align(Alignment.Start),
-        )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(24.dp))
 
         UvChart(
             hours = hours,
