@@ -30,9 +30,24 @@ android {
         buildConfigField("String", "GIT_DESCRIBE", "\"$gitDescribe\"")
     }
 
+    // Signing config for release builds reads from env vars so the keystore
+    // path and passwords stay out of the repo. The keystore file itself lives
+    // outside the working tree (see README). Debug builds keep using the
+    // auto-generated debug keystore — this only affects release.
+    signingConfigs {
+        create("release") {
+            providers.environmentVariable("SUNBURN_KEYSTORE").orNull
+                ?.let { storeFile = file(it) }
+            storePassword = providers.environmentVariable("SUNBURN_KEYSTORE_PASSWORD").orNull
+            keyAlias = providers.environmentVariable("SUNBURN_KEY_ALIAS").orElse("sunburn").get()
+            keyPassword = providers.environmentVariable("SUNBURN_KEY_PASSWORD").orNull
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
