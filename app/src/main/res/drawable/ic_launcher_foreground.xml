@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Sun: centered in the 108x108 viewport. Safe zone is roughly 66dp diameter -->
+    <group android:translateX="0" android:translateY="0">
+        <!-- Rays -->
+        <path
+            android:fillColor="#E08E00"
+            android:pathData="M54,22 L54,32 M54,76 L54,86 M22,54 L32,54 M76,54 L86,54 M31.7,31.7 L38.8,38.8 M69.2,69.2 L76.3,76.3 M31.7,76.3 L38.8,69.2 M69.2,38.8 L76.3,31.7"
+            android:strokeColor="#E08E00"
+            android:strokeWidth="6"
+            android:strokeLineCap="round"/>
+        <!-- Sun body -->
+        <path
+            android:fillColor="#E08E00"
+            android:pathData="M54,38 m-16,0 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0z"/>
+    </group>
+</vector>
