@@ -135,8 +135,9 @@ suspend fun searchLocations(query: String, bias: Location? = null): List<Locatio
 
 private val POSTCODE = Regex("""\d{3,6}""")
 
-/** Strip numeric postcode parts from Nominatim's display_name. */
-private fun cleanDisplayName(s: String): String =
+/** Strip numeric postcode parts from Nominatim's display_name.
+ *  `internal` so unit tests can call it directly. */
+internal fun cleanDisplayName(s: String): String =
     s.split(",")
         .map { it.trim() }
         .filter { it.isNotEmpty() && !POSTCODE.matches(it) }
