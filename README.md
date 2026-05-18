@@ -2,8 +2,7 @@
 
 # Sunburn
 
-An Android app that shows today's UV index curve for a chosen location.
-Built to answer *do I need sunscreen today?*
+An Android app that shows today's UV index:
 
 <img src="docs/screenshot.png" width="280" alt="Sunburn app screenshot">
 
