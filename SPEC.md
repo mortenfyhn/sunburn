@@ -40,11 +40,3 @@ today's UV index curve for one chosen location.
 
 Both attributions sit on the main screen because the licences require
 visible credit.
-
-## Non-goals
-
-- Multi-day forecasts.
-- Play Store / F-Droid (might happen later).
-- Notifications, widgets, watch face, complications.
-- Cloud sync, accounts, multi-device.
-- Skin-type / SPF calculators.
