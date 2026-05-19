@@ -44,6 +44,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -127,7 +130,8 @@ private fun UvApp() {
         }
     }
 
-    LaunchedEffect(selected) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(selected, lifecycle) {
         val s = selected
         if (s == null) {
             // Brief window before the seed effect above writes the default.
@@ -135,26 +139,36 @@ private fun UvApp() {
             forecast = ForecastState.Loading
             return@LaunchedEffect
         }
-        // Stale-while-revalidate: show cached data immediately if we have it
-        // (so the app works offline if today's forecast was fetched earlier),
-        // then try to refresh in the background. On refresh failure keep the
-        // cache silently — surfacing an error would be noise when the user
-        // already has usable data on screen.
-        val cached = recents.loadCache(s)
-        forecast = if (cached != null) ForecastState.Loaded(s, cached) else ForecastState.Loading
-        runCatching { fetchForecast(s, cached) }
-            .onSuccess {
-                forecast = ForecastState.Loaded(s, it)
-                recents.saveCache(s, it)
+        // Re-run on every ON_RESUME so the user gets today's data when they
+        // bring the app back from background — otherwise the in-memory state
+        // stays pinned to the day the activity was first created.
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            // Stale-while-revalidate: show cached data immediately if we have
+            // it (so the app works offline if today's forecast was fetched
+            // earlier), then try to refresh in the background. On refresh
+            // failure keep the cache silently — surfacing an error would be
+            // noise when the user already has usable data on screen.
+            val cached = recents.loadCache(s)
+            if (forecast !is ForecastState.Loaded) {
+                forecast = if (cached != null) ForecastState.Loaded(s, cached)
+                           else ForecastState.Loading
             }
-            .onFailure {
-                // runCatching catches Throwable, including CancellationException
-                // thrown when the parent LaunchedEffect restarts (e.g. user
-                // switches location quickly). Without rethrowing we'd flash
-                // "Could not load" from a coroutine that's no longer current.
-                if (it is CancellationException) throw it
-                if (cached == null) forecast = ForecastState.Error
-            }
+            runCatching { fetchForecast(s, cached) }
+                .onSuccess {
+                    forecast = ForecastState.Loaded(s, it)
+                    recents.saveCache(s, it)
+                }
+                .onFailure {
+                    // runCatching catches Throwable, including
+                    // CancellationException thrown when the lifecycle leaves
+                    // RESUMED or the parent LaunchedEffect restarts (e.g. user
+                    // switches location quickly). Without rethrowing we'd
+                    // flash "Could not load" from a coroutine that's no longer
+                    // current.
+                    if (it is CancellationException) throw it
+                    if (forecast !is ForecastState.Loaded) forecast = ForecastState.Error
+                }
+        }
     }
 
     Scaffold(containerColor = Background) { padding ->
