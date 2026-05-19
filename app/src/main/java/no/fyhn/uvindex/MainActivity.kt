@@ -3,6 +3,7 @@ package no.fyhn.uvindex
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -271,21 +274,21 @@ private fun LoadedView(loc: Location, hours: List<HourUv>, onPickLocation: () ->
 
         Spacer(Modifier.weight(1f))
 
-        LocationRowBar(name = loc.displayName, onClick = onPickLocation)
+        LocationPickerPill(loc.displayName, onPickLocation)
 
         Spacer(Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun LocationRowBar(name: String, onClick: () -> Unit) {
+private fun LocationPickerPill(name: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFFF2F2F2))
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
     ) {
         Text(text = name, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Ink)
         Text(text = " ▾", fontSize = 16.sp, color = Muted)
