@@ -389,7 +389,8 @@ private fun LocationPicker(
                         )
                     }
                     items(recents) { loc ->
-                        LocationRow(loc, onPicked, onDelete = { onDeleteRecent(loc) })
+                        val onDelete = if (recents.size > 1) ({ onDeleteRecent(loc) }) else null
+                        LocationRow(loc, onPicked, onDelete = onDelete)
                     }
                 }
             } else {
