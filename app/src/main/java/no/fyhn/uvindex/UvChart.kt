@@ -105,12 +105,36 @@ fun UvChart(
             drawText(layout, topLeft = Offset(lx, ly))
         }
 
-        // X-axis: daytime quarters only. 00 and 24 are obvious from the curve
-        // bottoming out at zero at both edges.
-        val xTickIdx = listOf(6, 12, 18).filter { it < hours.size }
-        for (i in xTickIdx) {
-            val x = xAt(i.toDouble())
-            val label = "%02d".format(hours[i].localTime.hour)
+        // X-axis: label the first rising and last falling crossings of the
+        // sunscreen threshold rather than generic hour ticks. Generic ticks
+        // made the reader interpolate ("the crossing is somewhere between 06
+        // and 12") to answer the question they actually had — when do I need
+        // sunscreen, when can I stop. Direct labels answer it at source. If
+        // the curve never crosses (winter, high latitude), fall back to noon
+        // as a single anchor so the chart still has some time orientation.
+        val desc = (hours.size - 1 downTo 1).firstOrNull { i ->
+            hours[i - 1].uv >= SUNSCREEN_THRESHOLD && hours[i].uv < SUNSCREEN_THRESHOLD
+        }
+        val crossingFracs = listOfNotNull(asc, desc).map { i ->
+            val prev = hours[i - 1].uv
+            val curr = hours[i].uv
+            (i - 1) + (SUNSCREEN_THRESHOLD - prev) / (curr - prev)
+        }
+        val xLabelFracs = when {
+            crossingFracs.isNotEmpty() -> crossingFracs
+            12 < hours.size -> listOf(12.0)
+            else -> emptyList()
+        }
+        for (frac in xLabelFracs) {
+            val baseIdx = frac.toInt().coerceIn(0, hours.size - 1)
+            val baseTime = hours[baseIdx].localTime
+            val totalMinutes = baseTime.hour * 60 + baseTime.minute +
+                ((frac - baseIdx) * 60).toInt()
+            // Round to nearest 10 minutes — the forecast is hourly and
+            // interpolation precision wouldn't be honest at higher resolution.
+            val rounded = ((totalMinutes + 5) / 10) * 10
+            val label = "%02d:%02d".format((rounded / 60) % 24, rounded % 60)
+            val x = xAt(frac)
             val layout = tm.measure(label, axisStyle)
             drawText(
                 layout,
