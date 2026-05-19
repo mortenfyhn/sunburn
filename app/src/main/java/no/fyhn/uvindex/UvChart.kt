@@ -184,14 +184,38 @@ fun UvChart(
 
             val nowText = formatUvLabel(nowUv)
             val layout = tm.measure(nowText, nowStyle)
-            drawText(
-                layout,
-                topLeft = Offset(
-                    x = (nowX - layout.size.width / 2f)
-                        .coerceIn(plotLeft, plotRight - layout.size.width),
-                    y = nowY - layout.size.height - 6.dp.toPx(),
-                ),
-            )
+            val labelW = layout.size.width.toFloat()
+            val labelH = layout.size.height.toFloat()
+
+            // Place the label along the curve's upward normal at the dot.
+            // On a steep rise, the normal points up-and-left — keeping the
+            // label clear of the climbing curve instead of stacking it
+            // directly on top, where the curve would saw through the digits.
+            val eps = 0.5
+            val h0 = (nowFracHour - eps).coerceAtLeast(0.0)
+            val h1 = (nowFracHour + eps).coerceAtMost(lastIndex.toDouble())
+            val tdx = xAt(h1) - xAt(h0)
+            val tdy = yAt(interpolatedUv(hours, h1)) - yAt(interpolatedUv(hours, h0))
+            val tlen = kotlin.math.sqrt(tdx * tdx + tdy * tdy)
+            // Perpendicular to (tdx, tdy) with negative y (upward on screen).
+            val nx = tdy / tlen
+            val ny = -tdx / tlen
+
+            val gap = 8.dp.toPx()
+            // Push the centre out far enough that the nearest edge of the
+            // (axis-aligned) label sits `gap` from the dot, regardless of
+            // normal direction.
+            val halfProj = (labelW / 2f) * kotlin.math.abs(nx) +
+                (labelH / 2f) * kotlin.math.abs(ny)
+            val d = gap + halfProj
+            val centerX = nowX + nx * d
+            val centerY = nowY + ny * d
+
+            val labelLeft = (centerX - labelW / 2f)
+                .coerceIn(plotLeft, plotRight - labelW)
+            val labelTop = centerY - labelH / 2f
+
+            drawText(layout, topLeft = Offset(labelLeft, labelTop))
         }
     }
 }
