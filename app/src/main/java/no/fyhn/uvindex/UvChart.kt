@@ -67,29 +67,18 @@ fun UvChart(
 
         val thresholdY = yAt(SUNSCREEN_THRESHOLD)
 
-        // Y-axis "0": stays at the left edge — the flat-zero shoulders of the
-        // curve sit right on it, so it's already touching the data it labels.
-        run {
-            val layout = tm.measure("0", axisStyle)
-            drawText(
-                layout,
-                topLeft = Offset(
-                    x = plotLeft - layout.size.width - 10.dp.toPx(),
-                    y = yAt(0.0) - layout.size.height / 2f,
-                ),
-            )
-        }
-
-        // Threshold "2": labelled directly on the orange fill's lower edge,
+        // Threshold "2.0": labelled directly on the orange fill's lower edge,
         // just left of where the curve first crosses the threshold going up.
         // Direct labelling — the value touches the line it names. Fall back
         // to the y-axis if the curve never crosses 2 today (no orange fill,
-        // no inline anchor, but the scale still wants its label).
+        // no inline anchor, but the scale still wants its label). No "0" on
+        // the y-axis: the curve's flat shoulders sit visibly at the bottom
+        // of the plot, so the label would only restate what the shape shows.
         val asc = (1 until hours.size).firstOrNull { i ->
             hours[i - 1].uv < SUNSCREEN_THRESHOLD && hours[i].uv >= SUNSCREEN_THRESHOLD
         }
         run {
-            val twoLabel = SUNSCREEN_THRESHOLD.toInt().toString()
+            val twoLabel = formatUvLabel(SUNSCREEN_THRESHOLD)
             val layout = tm.measure(twoLabel, axisStyle)
             val (lx, ly) = if (asc != null) {
                 val prev = hours[asc - 1].uv
