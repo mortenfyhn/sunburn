@@ -1,7 +1,13 @@
 package no.fyhn.uvindex
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -9,6 +15,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -47,7 +55,39 @@ fun UvChart(
     // The current value is the primary reading; size it larger than the peak.
     val nowStyle = TextStyle(color = Ink, fontSize = 22.sp, fontWeight = FontWeight.Medium)
 
-    Canvas(modifier = modifier) {
+    // Scrub: when the user touches/drags on the chart, override the marker
+    // position; release snaps back to now. Prototype — testing whether users
+    // want to inspect UV at arbitrary times of day.
+    var scrubFrac by remember { mutableStateOf<Double?>(null) }
+    val markerFrac = scrubFrac ?: nowFracHour
+
+    Canvas(
+        modifier = modifier.pointerInput(hours.size) {
+            val leftPx = 32.dp.toPx()
+            val rightPx = 8.dp.toPx()
+            val lastIdx = (hours.size - 1).toDouble()
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                val plotW = (size.width - leftPx - rightPx).coerceAtLeast(1f)
+                fun toFrac(x: Float): Double {
+                    val clamped = x.coerceIn(leftPx, size.width - rightPx)
+                    return ((clamped - leftPx) / plotW).toDouble().coerceIn(0.0, 1.0) * lastIdx
+                }
+                scrubFrac = toFrac(down.position.x)
+                down.consume()
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.first()
+                    if (change.changedToUp()) {
+                        scrubFrac = null
+                        break
+                    }
+                    scrubFrac = toFrac(change.position.x)
+                    change.consume()
+                }
+            }
+        }
+    ) {
         if (hours.size < 2) return@Canvas
 
         val maxUv = hours.maxOf { it.uv }
@@ -98,16 +138,16 @@ fun UvChart(
         // rect is consulted below to position "2.0" on whichever side of the
         // orange band isn't sitting under the larger now-label.
         val nowMarker: NowMarker? =
-            if (nowFracHour in 0.0..lastIndex.toDouble()) {
-                val nowUv = interpolatedUv(hours, nowFracHour)
-                val nowX = xAt(nowFracHour)
+            if (markerFrac in 0.0..lastIndex.toDouble()) {
+                val nowUv = interpolatedUv(hours, markerFrac)
+                val nowX = xAt(markerFrac)
                 val nowY = yAt(nowUv)
                 val layout = tm.measure(formatUvLabel(nowUv), nowStyle)
                 val labelW = layout.size.width.toFloat()
                 val labelH = layout.size.height.toFloat()
                 val eps = 0.5
-                val h0 = (nowFracHour - eps).coerceAtLeast(0.0)
-                val h1 = (nowFracHour + eps).coerceAtMost(lastIndex.toDouble())
+                val h0 = (markerFrac - eps).coerceAtLeast(0.0)
+                val h1 = (markerFrac + eps).coerceAtMost(lastIndex.toDouble())
                 val tdx = xAt(h1) - xAt(h0)
                 val tdy = yAt(interpolatedUv(hours, h1)) - yAt(interpolatedUv(hours, h0))
                 val tlen = kotlin.math.sqrt(tdx * tdx + tdy * tdy)
@@ -226,8 +266,8 @@ fun UvChart(
         // sitting on the peak (within an hour), since the now-label already
         // reports the same value at the same point and the two would overlap.
         val peakIdx = hours.indexOfFirst { it.uv == maxUv }
-        val nowVisible = nowFracHour in 0.0..lastIndex.toDouble()
-        val nowAtPeak = nowVisible && kotlin.math.abs(nowFracHour - peakIdx) < 1.0
+        val nowVisible = markerFrac in 0.0..lastIndex.toDouble()
+        val nowAtPeak = nowVisible && kotlin.math.abs(markerFrac - peakIdx) < 1.0
         if (peakIdx >= 0 && !nowAtPeak) {
             val peakX = xAt(peakIdx.toDouble())
             val peakY = yAt(maxUv)
