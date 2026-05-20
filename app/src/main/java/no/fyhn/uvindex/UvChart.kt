@@ -198,7 +198,13 @@ fun UvChart(
         // never crosses 2 today. No "0" on the y-axis: the curve's flat
         // shoulders sit visibly at the bottom of the plot, so the label would
         // only restate what the shape shows.
-        run {
+        //
+        // Skipped entirely when the day's max also rounds to 2.0 — the peak
+        // label printed at the apex carries that number, and a second
+        // identical "2.0" a few pixels away just looks like a typo.
+        val peakIsAtThreshold =
+            formatUvLabel(maxUv) == formatUvLabel(SUNSCREEN_THRESHOLD)
+        if (!peakIsAtThreshold) run {
             val layout = tm.measure(formatUvLabel(SUNSCREEN_THRESHOLD), axisStyle)
             val labelW = layout.size.width.toFloat()
             val labelH = layout.size.height.toFloat()
