@@ -12,11 +12,14 @@ Requires Android SDK with platform 35 and JDK 17 (the user's default).
 
 ## Emulator workflow
 
-The user has two AVDs: `Medium_Phone_API_36.1` and `small_phone`. Boot one
-without snapshotting state between runs:
+After any UI-affecting change, boot the emulator, install, launch, screenshot,
+and `Read` the PNG so the user can review the result visually in the response
+— don't stop at "build successful". Default AVD is `small_phone` (the user
+also has `Medium_Phone_API_36.1` for the larger form factor). Boot without
+snapshotting state between runs:
 
 ```bash
-~/Android/Sdk/emulator/emulator -avd Medium_Phone_API_36.1 \
+~/Android/Sdk/emulator/emulator -avd small_phone \
     -no-snapshot-save -no-boot-anim -netdelay none -netspeed full
 ```
 
