@@ -4,10 +4,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -21,6 +23,15 @@ import java.util.Locale
 
 private val Ink = Color(0xFF111111)
 private val Sunburn = Color(0xFFEFA572)  // warm orange for UV > threshold
+
+private data class NowMarker(
+    val dotX: Float,
+    val dotY: Float,
+    val layout: TextLayoutResult,
+    val labelLeft: Float,
+    val labelTop: Float,
+    val rect: Rect,
+)
 
 const val SUNSCREEN_THRESHOLD = 2.0
 
@@ -67,31 +78,86 @@ fun UvChart(
 
         val thresholdY = yAt(SUNSCREEN_THRESHOLD)
 
-        // Threshold "2.0": labelled directly on the orange fill's lower edge,
-        // just left of where the curve first crosses the threshold going up.
-        // Direct labelling — the value touches the line it names. Fall back
-        // to the y-axis if the curve never crosses 2 today (no orange fill,
-        // no inline anchor, but the scale still wants its label). No "0" on
-        // the y-axis: the curve's flat shoulders sit visibly at the bottom
-        // of the plot, so the label would only restate what the shape shows.
+        // Threshold crossings (rising and falling). Used to anchor the "2.0"
+        // label, the time markers, and the now/threshold overlap test.
         val asc = (1 until hours.size).firstOrNull { i ->
             hours[i - 1].uv < SUNSCREEN_THRESHOLD && hours[i].uv >= SUNSCREEN_THRESHOLD
         }
+        val desc = (hours.size - 1 downTo 1).firstOrNull { i ->
+            hours[i - 1].uv >= SUNSCREEN_THRESHOLD && hours[i].uv < SUNSCREEN_THRESHOLD
+        }
+        fun crossingFrac(i: Int): Double {
+            val prev = hours[i - 1].uv
+            val curr = hours[i].uv
+            return (i - 1) + (SUNSCREEN_THRESHOLD - prev) / (curr - prev)
+        }
+        val ascFrac: Double? = asc?.let { crossingFrac(it) }
+        val descFrac: Double? = desc?.let { crossingFrac(it) }
+
+        // Pre-compute the now-marker geometry (dot + label rectangle). The
+        // rect is consulted below to position "2.0" on whichever side of the
+        // orange band isn't sitting under the larger now-label.
+        val nowMarker: NowMarker? =
+            if (nowFracHour in 0.0..lastIndex.toDouble()) {
+                val nowUv = interpolatedUv(hours, nowFracHour)
+                val nowX = xAt(nowFracHour)
+                val nowY = yAt(nowUv)
+                val layout = tm.measure(formatUvLabel(nowUv), nowStyle)
+                val labelW = layout.size.width.toFloat()
+                val labelH = layout.size.height.toFloat()
+                val eps = 0.5
+                val h0 = (nowFracHour - eps).coerceAtLeast(0.0)
+                val h1 = (nowFracHour + eps).coerceAtMost(lastIndex.toDouble())
+                val tdx = xAt(h1) - xAt(h0)
+                val tdy = yAt(interpolatedUv(hours, h1)) - yAt(interpolatedUv(hours, h0))
+                val tlen = kotlin.math.sqrt(tdx * tdx + tdy * tdy)
+                val nx = tdy / tlen
+                val ny = -tdx / tlen
+                val gap = 8.dp.toPx()
+                val halfProj = (labelW / 2f) * kotlin.math.abs(nx) +
+                    (labelH / 2f) * kotlin.math.abs(ny)
+                val d = gap + halfProj
+                val centerX = nowX + nx * d
+                val centerY = nowY + ny * d
+                val labelLeft = (centerX - labelW / 2f)
+                    .coerceIn(plotLeft, plotRight - labelW)
+                val labelTop = centerY - labelH / 2f
+                NowMarker(
+                    dotX = nowX,
+                    dotY = nowY,
+                    layout = layout,
+                    labelLeft = labelLeft,
+                    labelTop = labelTop,
+                    rect = Rect(labelLeft, labelTop, labelLeft + labelW, labelTop + labelH),
+                )
+            } else null
+
+        // Threshold "2.0": labelled directly on the orange fill's edge so the
+        // value touches the line it names. Default to the rising crossing
+        // (left of where orange begins); if the now-label would overlap that
+        // spot, jump to the falling crossing (right of where orange ends).
+        // Fall back to the y-axis if neither inline spot works or the curve
+        // never crosses 2 today. No "0" on the y-axis: the curve's flat
+        // shoulders sit visibly at the bottom of the plot, so the label would
+        // only restate what the shape shows.
         run {
-            val twoLabel = formatUvLabel(SUNSCREEN_THRESHOLD)
-            val layout = tm.measure(twoLabel, axisStyle)
-            val (lx, ly) = if (asc != null) {
-                val prev = hours[asc - 1].uv
-                val curr = hours[asc].uv
-                val t = (SUNSCREEN_THRESHOLD - prev) / (curr - prev)
-                val crossingX = xAt((asc - 1) + t)
-                (crossingX - layout.size.width - 6.dp.toPx()) to
-                    (thresholdY - layout.size.height / 2f)
-            } else {
-                (plotLeft - layout.size.width - 10.dp.toPx()) to
-                    (thresholdY - layout.size.height / 2f)
+            val layout = tm.measure(formatUvLabel(SUNSCREEN_THRESHOLD), axisStyle)
+            val labelW = layout.size.width.toFloat()
+            val labelH = layout.size.height.toFloat()
+            val ly = thresholdY - labelH / 2f
+            fun rectAt(lx: Float) = Rect(lx, ly, lx + labelW, ly + labelH)
+            fun clearOfNow(r: Rect) = nowMarker?.rect?.overlaps(r) != true
+
+            val ascPos: Float? = ascFrac?.let { xAt(it) - labelW - 6.dp.toPx() }
+            val descPos: Float? = descFrac?.let { xAt(it) + 6.dp.toPx() }
+            val lx = when {
+                ascPos != null && clearOfNow(rectAt(ascPos)) -> ascPos
+                descPos != null && clearOfNow(rectAt(descPos)) -> descPos
+                ascPos == null && descPos == null ->
+                    plotLeft - labelW - 10.dp.toPx()
+                else -> null  // both inline spots collide; omit the label
             }
-            drawText(layout, topLeft = Offset(lx, ly))
+            if (lx != null) drawText(layout, topLeft = Offset(lx, ly))
         }
 
         // X-axis: label the first rising and last falling crossings of the
@@ -101,14 +167,7 @@ fun UvChart(
         // sunscreen, when can I stop. Direct labels answer it at source. If
         // the curve never crosses (winter, high latitude), fall back to noon
         // as a single anchor so the chart still has some time orientation.
-        val desc = (hours.size - 1 downTo 1).firstOrNull { i ->
-            hours[i - 1].uv >= SUNSCREEN_THRESHOLD && hours[i].uv < SUNSCREEN_THRESHOLD
-        }
-        val crossingFracs = listOfNotNull(asc, desc).map { i ->
-            val prev = hours[i - 1].uv
-            val curr = hours[i].uv
-            (i - 1) + (SUNSCREEN_THRESHOLD - prev) / (curr - prev)
-        }
+        val crossingFracs = listOfNotNull(ascFrac, descFrac)
         val xLabelFracs = when {
             crossingFracs.isNotEmpty() -> crossingFracs
             12 < hours.size -> listOf(12.0)
@@ -187,48 +246,23 @@ fun UvChart(
         // "Now" marker: solid dot with a thin white halo (so it stays visible
         // on top of the curve stroke), plus the current value floating above
         // — mirrors the peak label's placement so both annotations read the
-        // same way.
-        if (nowFracHour in 0.0..lastIndex.toDouble()) {
-            val nowUv = interpolatedUv(hours, nowFracHour)
-            val nowX = xAt(nowFracHour)
-            val nowY = yAt(nowUv)
-            drawCircle(color = Color.White, radius = 6.5.dp.toPx(), center = Offset(nowX, nowY))
-            drawCircle(color = Ink, radius = 4.5.dp.toPx(), center = Offset(nowX, nowY))
-
-            val nowText = formatUvLabel(nowUv)
-            val layout = tm.measure(nowText, nowStyle)
-            val labelW = layout.size.width.toFloat()
-            val labelH = layout.size.height.toFloat()
-
-            // Place the label along the curve's upward normal at the dot.
-            // On a steep rise, the normal points up-and-left — keeping the
-            // label clear of the climbing curve instead of stacking it
-            // directly on top, where the curve would saw through the digits.
-            val eps = 0.5
-            val h0 = (nowFracHour - eps).coerceAtLeast(0.0)
-            val h1 = (nowFracHour + eps).coerceAtMost(lastIndex.toDouble())
-            val tdx = xAt(h1) - xAt(h0)
-            val tdy = yAt(interpolatedUv(hours, h1)) - yAt(interpolatedUv(hours, h0))
-            val tlen = kotlin.math.sqrt(tdx * tdx + tdy * tdy)
-            // Perpendicular to (tdx, tdy) with negative y (upward on screen).
-            val nx = tdy / tlen
-            val ny = -tdx / tlen
-
-            val gap = 8.dp.toPx()
-            // Push the centre out far enough that the nearest edge of the
-            // (axis-aligned) label sits `gap` from the dot, regardless of
-            // normal direction.
-            val halfProj = (labelW / 2f) * kotlin.math.abs(nx) +
-                (labelH / 2f) * kotlin.math.abs(ny)
-            val d = gap + halfProj
-            val centerX = nowX + nx * d
-            val centerY = nowY + ny * d
-
-            val labelLeft = (centerX - labelW / 2f)
-                .coerceIn(plotLeft, plotRight - labelW)
-            val labelTop = centerY - labelH / 2f
-
-            drawText(layout, topLeft = Offset(labelLeft, labelTop))
+        // same way. Position is computed earlier so the threshold "2.0"
+        // placement can avoid overlapping the same rectangle.
+        if (nowMarker != null) {
+            drawCircle(
+                color = Color.White,
+                radius = 6.5.dp.toPx(),
+                center = Offset(nowMarker.dotX, nowMarker.dotY),
+            )
+            drawCircle(
+                color = Ink,
+                radius = 4.5.dp.toPx(),
+                center = Offset(nowMarker.dotX, nowMarker.dotY),
+            )
+            drawText(
+                nowMarker.layout,
+                topLeft = Offset(nowMarker.labelLeft, nowMarker.labelTop),
+            )
         }
     }
 }
