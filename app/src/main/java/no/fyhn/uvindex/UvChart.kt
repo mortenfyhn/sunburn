@@ -243,20 +243,14 @@ fun UvChart(
             )
         }
 
-        // "Now" marker: solid dot with a thin white halo (so it stays visible
-        // on top of the curve stroke), plus the current value floating above
-        // — mirrors the peak label's placement so both annotations read the
+        // "Now" marker: solid dot plus the current value floating above —
+        // mirrors the peak label's placement so both annotations read the
         // same way. Position is computed earlier so the threshold "2.0"
         // placement can avoid overlapping the same rectangle.
         if (nowMarker != null) {
             drawCircle(
-                color = Color.White,
-                radius = 6.5.dp.toPx(),
-                center = Offset(nowMarker.dotX, nowMarker.dotY),
-            )
-            drawCircle(
                 color = Ink,
-                radius = 4.5.dp.toPx(),
+                radius = 5.5.dp.toPx(),
                 center = Offset(nowMarker.dotX, nowMarker.dotY),
             )
             drawText(
