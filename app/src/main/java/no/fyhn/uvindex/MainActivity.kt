@@ -142,6 +142,19 @@ private fun UvApp() {
             forecast = ForecastState.Loading
             return@LaunchedEffect
         }
+        // Search results from Nominatim arrive without a timezone. Resolve it
+        // before fetching so the forecast gets bucketed into the location's
+        // local hours rather than the device's. Re-save the populated location
+        // — that re-emits `selected` and restarts this effect with a fixed-up
+        // copy. If the lookup fails, fall through and let the system zone do
+        // its best; the next refresh will retry.
+        if (s.timezone == null) {
+            val tz = runCatching { lookupTimezone(s.latitude, s.longitude) }.getOrNull()
+            if (tz != null) {
+                recents.select(s.copy(timezone = tz))
+                return@LaunchedEffect
+            }
+        }
         // Re-run on every ON_RESUME so the user gets today's data when they
         // bring the app back from background — otherwise the in-memory state
         // stays pinned to the day the activity was first created.

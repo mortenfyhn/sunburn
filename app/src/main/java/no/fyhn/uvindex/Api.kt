@@ -100,6 +100,26 @@ private data class UvResponse(
 @Serializable
 private data class UvSample(val time: String, val uvi: Double)
 
+/**
+ * Resolve the IANA timezone for a coordinate. Nominatim doesn't return one, so
+ * without this every searched location renders in the device's wall clock —
+ * Sydney's UV curve gets bucketed into Oslo's hours and the "now" dot lands at
+ * the wrong x. Open-Meteo's `timezone=auto` echoes the resolved zone back; the
+ * tiny `current=temperature_2m` payload is just to satisfy the API's "ask for
+ * at least one variable" rule.
+ */
+suspend fun lookupTimezone(latitude: Double, longitude: Double): String? = withContext(Dispatchers.IO) {
+    val url = "https://api.open-meteo.com/v1/forecast" +
+        "?latitude=$latitude&longitude=$longitude&timezone=auto&current=temperature_2m"
+    val body = runCatching { httpGet(url) }.getOrNull() ?: return@withContext null
+    runCatching {
+        json.decodeFromString<TimezoneResponse>(body).timezone
+    }.getOrNull()
+}
+
+@Serializable
+private data class TimezoneResponse(val timezone: String? = null)
+
 @Serializable
 private data class NominatimResult(
     @SerialName("display_name") val displayName: String,
