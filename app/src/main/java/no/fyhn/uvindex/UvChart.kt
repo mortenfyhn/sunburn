@@ -95,8 +95,10 @@ fun UvChart(
 
         val leftPad = 32.dp.toPx()
         val rightPad = 8.dp.toPx()
-        // Generous top padding to fit the floating peak label above the apex.
-        val topPad = 28.dp.toPx()
+        // Top padding has to fit the larger now-label above the curve's apex
+        // when the now-dot is near the peak — taller than the peak label that
+        // used to set this budget.
+        val topPad = 44.dp.toPx()
         val bottomPad = 28.dp.toPx()
 
         val plotLeft = leftPad
@@ -161,7 +163,23 @@ fun UvChart(
                 val centerY = nowY + ny * d
                 val labelLeft = (centerX - labelW / 2f)
                     .coerceIn(plotLeft, plotRight - labelW)
-                val labelTop = centerY - labelH / 2f
+                // Tangent-normal placement only considers the curve at the
+                // now-dot. On a flat-top "double peak" the nearby higher peak
+                // pokes into the label's rectangle from outside that local
+                // window — sample the curve under the label's X-span and lift
+                // the label until it clears.
+                var curveTopY = Float.POSITIVE_INFINITY
+                val samples = 16
+                for (s in 0..samples) {
+                    val sx = labelLeft + labelW * s / samples.toFloat()
+                    val sFrac = ((sx - plotLeft) / plotW).coerceIn(0f, 1f).toDouble() * lastIndex
+                    val sy = yAt(interpolatedUv(hours, sFrac))
+                    if (sy < curveTopY) curveTopY = sy
+                }
+                val labelTop = minOf(
+                    centerY - labelH / 2f,
+                    curveTopY - labelH - gap,
+                )
                 NowMarker(
                     dotX = nowX,
                     dotY = nowY,
@@ -262,25 +280,25 @@ fun UvChart(
         drawPath(curvePath, color = Ink, style = Stroke(width = 2.5.dp.toPx()))
 
         // Peak label floating above the apex — replaces the y-axis ticks that
-        // used to show the day's top value. Suppressed when the now-dot is
-        // sitting on the peak (within an hour), since the now-label already
-        // reports the same value at the same point and the two would overlap.
+        // used to show the day's top value. Suppressed when its rect would
+        // collide with the now-label; the now-label already reports a value
+        // at roughly the same point. Rect overlap (not an hour-distance
+        // heuristic) so flat-top curves with multiple equal-max hours, where
+        // peakIdx pins left of the now-dot, still suppress correctly.
         val peakIdx = hours.indexOfFirst { it.uv == maxUv }
-        val nowVisible = markerFrac in 0.0..lastIndex.toDouble()
-        val nowAtPeak = nowVisible && kotlin.math.abs(markerFrac - peakIdx) < 1.0
-        if (peakIdx >= 0 && !nowAtPeak) {
+        if (peakIdx >= 0) {
             val peakX = xAt(peakIdx.toDouble())
             val peakY = yAt(maxUv)
-            val peakText = formatUvLabel(maxUv)
-            val layout = tm.measure(peakText, peakStyle)
-            drawText(
-                layout,
-                topLeft = Offset(
-                    x = (peakX - layout.size.width / 2f)
-                        .coerceIn(plotLeft, plotRight - layout.size.width),
-                    y = peakY - layout.size.height - 6.dp.toPx(),
-                ),
-            )
+            val layout = tm.measure(formatUvLabel(maxUv), peakStyle)
+            val labelW = layout.size.width.toFloat()
+            val labelH = layout.size.height.toFloat()
+            val peakLeft = (peakX - labelW / 2f)
+                .coerceIn(plotLeft, plotRight - labelW)
+            val peakTop = peakY - labelH - 6.dp.toPx()
+            val peakRect = Rect(peakLeft, peakTop, peakLeft + labelW, peakTop + labelH)
+            if (nowMarker?.rect?.overlaps(peakRect) != true) {
+                drawText(layout, topLeft = Offset(peakLeft, peakTop))
+            }
         }
 
         // "Now" marker: solid dot plus the current value floating above —
